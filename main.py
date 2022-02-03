@@ -17,6 +17,7 @@ def _score_word(word, greens, yellows, blacks) -> int:
 		
 	return score
 
+max_checks = 200_000
 def _get_best_guess(greens: dict, yellows: dict, blacks: dict, letter_counts: dict, letter_count: int) -> str:
 	filters = _create_filters(greens, yellows, blacks, letter_counts)
 	words = list(set([w.lower() for w in all_words if len(w) == letter_count and w.isalpha()]))
@@ -31,18 +32,18 @@ def _get_best_guess(greens: dict, yellows: dict, blacks: dict, letter_counts: di
 	print('Best ' + str(len(bests__)) + ' impossible words for guessing: ' + str(bests__))
 
 	random.shuffle(possible_words)
-	possible_words = possible_words[:70]
+	max_check_sqrt = int(max_checks**.5)
+	possible_words = possible_words[:max_check_sqrt]
 	print('Number of possible words count given knowledge: ', len(possible_words))
 
 	guesses = []
-	if len(possible_words) <= 3:
+	if len(possible_words) == 1:
 		guesses = list(possible_words)
 	else:
-		guesses = list(possible_words) + best_guess_words[-len(possible_words):]
-	
-	random.shuffle(guesses)
-	guess_count = int(5000 / len(possible_words))
-	guesses = guesses[:guess_count]
+		random.shuffle(possible_words)
+		guess_count = int(max_checks / len(possible_words))
+		guesses += possible_words[:int(guess_count / 2)]
+		guesses += best_guess_words[-int(guess_count / 2):]
 
 	print('Total guesses: ' + str(len(guesses)))
 
@@ -50,26 +51,41 @@ def _get_best_guess(greens: dict, yellows: dict, blacks: dict, letter_counts: di
 	best_word_count = len(words) + 1
 
 	total_work = len(possible_words) * len(guesses)
-	work_done = 0
 	print('Total Comparisons: ' + str(total_work))
 
-	for i in range(len(possible_words)):
-		possible_winner = possible_words[i]
-		for j in range(len(guesses)):
-			possible_best_word = guesses[j]
+	for j in range(len(guesses)):
+		possible_best_word = guesses[j]
+		sum_of_result_word_count = 0
+		sum_of_filters_checked = 0
+
+		for i in range(len(possible_words)):
+			possible_winner = possible_words[i]
 			# If you can't win, next best thing is getting as close as possible
 			if possible_winner == possible_best_word:
 				continue
 
 			new_filters = _create_filters_best_guess(possible_winner, possible_best_word, greens, yellows, blacks, letter_counts)
-			new_possible_words_count = len(_filter_words(new_filters, words))
-			work_done += 1
-			if best_word_count < new_possible_words_count:
+			new_possible_words_count = len(_filter_words(new_filters, possible_words))
+			if new_possible_words_count == 0:
 				continue
+			
+			sum_of_result_word_count += new_possible_words_count
+			sum_of_filters_checked += 1
+			
+		if sum_of_filters_checked == 0:
+			continue
+
+		average_new_possible_words_count = int(sum_of_result_word_count / sum_of_filters_checked)
+		if best_word_count < average_new_possible_words_count:
+			continue
 		
-			best_word_count = new_possible_words_count
-			best_word = possible_best_word
+		best_word_count = average_new_possible_words_count
+		best_word = possible_best_word
 	
+	if best_word_count == len(words) + 1:
+		best_word_count = 1
+
+	print('Best possible filter from this word on average is from ' + str(len(possible_words)) + ' to ' + str(best_word_count))
 	return best_word
 
 def _get_color(winner, guess):
